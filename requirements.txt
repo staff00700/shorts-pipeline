@@ -1,0 +1,21 @@
+# YouTube Shorts Pipeline v1.0 - Dependencies
+
+# YouTube API
+google-api-python-client
+google-auth-oauthlib
+google-auth
+
+# Видео обработка
+yt-dlp
+ffmpeg-python
+
+# AI и озвучка
+openai
+whisper
+edge-tts
+
+# Веб-интерфейс
+flask
+
+# Утилиты
+requests
