@@ -681,6 +681,27 @@ class ShortsProcessor:
                     f":enable='between(t,0,3)'"
                 )
 
+            cta_start = max(0, duration - 4)
+            if font:
+                filter_parts.append(
+                    f"drawtext=text='Like & Subscribe'"
+                    f":fontfile={font}"
+                    f":fontsize=56"
+                    f":fontcolor=yellow"
+                    f":box=1:boxcolor=black@0.7:boxborderw=24"
+                    f":x=(w-text_w)/2:y=h*0.75"
+                    f":enable='between(t,{cta_start},{duration})'"
+                )
+                filter_parts.append(
+                    f"drawtext=text='Подпишись'"
+                    f":fontfile={font}"
+                    f":fontsize=42"
+                    f":fontcolor=white"
+                    f":box=1:boxcolor=black@0.5:boxborderw=16"
+                    f":x=(w-text_w)/2:y=h*0.75+70"
+                    f":enable='between(t,{cta_start},{duration})'"
+                )
+
             vf = ','.join(filter_parts)
 
             cmd = [

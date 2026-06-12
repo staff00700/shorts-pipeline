@@ -27,23 +27,34 @@ if not uploader.youtube:
     sys.exit(1)
 
 done = 0
+quota_wait_until = 0
+consecutive_failures = 0
+
 while True:
+    now = time.time()
+    if now < quota_wait_until:
+        wait = quota_wait_until - now
+        logger.warning(f"Ожидание квоты: {wait/60:.0f}мин...")
+        time.sleep(min(wait, 300))
+        continue
+
     conn = sqlite3.connect(str(DB))
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        "SELECT * FROM shorts WHERE status IN ('pending','error') AND filepath LIKE ? ORDER BY created_at ASC LIMIT 1",
+        "SELECT * FROM shorts WHERE status IN ('pending','error') AND (filepath LIKE ? OR filepath LIKE 'data/processed/%' OR filepath LIKE './data/processed/%') ORDER BY created_at ASC LIMIT 1",
         (f"{BASE}/data/processed/%",)
     ).fetchone()
     conn.close()
 
     if not row:
-        logger.info("All pending shorts uploaded!")
+        logger.info("All shorts processed!")
         break
 
     row = dict(row)
     path = row['filepath']
+    if not os.path.isabs(path):
+        path = str(BASE / path)
     if not os.path.exists(path):
-        logger.warning(f"File not found: {path}")
         conn = sqlite3.connect(str(DB))
         conn.execute("UPDATE shorts SET status='error' WHERE id=?", (row['id'],))
         conn.commit()
@@ -61,17 +72,6 @@ while True:
     else:
         tag_list = [t.strip() for t in tags_str.split(',') if t.strip()] or ['history', 'facts', 'shorts']
 
-    # Проверка квоты перед загрузкой
-    today_uploaded = sqlite3.connect(str(DB)).execute(
-        "SELECT COUNT(*) FROM shorts WHERE status='uploaded' AND date(uploaded_at) = date('now')"
-    ).fetchone()[0]
-    if today_uploaded >= 10:
-        tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=6, minute=0, second=0)
-        wait = (tomorrow - datetime.now()).total_seconds()
-        logger.warning(f"Лимит YT: {today_uploaded}/10. Жду до завтра ({wait/3600:.1f}ч)...")
-        time.sleep(wait + 60)
-        continue
-
     logger.info(f"[{done+1}] Uploading: {title}")
     import subprocess, os
     subprocess.run(['renice', '-n', '19', '-p', str(os.getpid())], capture_output=True)
@@ -86,7 +86,7 @@ while True:
             (yt_url, title, desc, tags_str, row['id'])
         )
         logger.info(f"  OK -> {yt_url}")
-        # Cleanup: удаляем загруженный файл
+        consecutive_failures = 0
         if os.path.exists(path):
             os.remove(path)
             logger.info(f"  Удалён: {path}")
@@ -94,18 +94,24 @@ while True:
             sub_path = path.replace('.mp4', ext)
             if os.path.exists(sub_path):
                 os.remove(sub_path)
-                logger.info(f"  Удалён: {sub_path}")
+        conn.commit()
+        conn.close()
+        done += 1
+        time.sleep(185 if done % 3 else 300)
     else:
         conn.execute("UPDATE shorts SET status='error' WHERE id=?", (row['id'],))
-        logger.error(f"  FAILED")
-    conn.commit()
-    conn.close()
-    done += 1
-    if done % 3 == 0:
-        logger.info(f"Progress: {done} uploaded, sleeping 5min to avoid quota")
-        time.sleep(300)
-    else:
-        time.sleep(185)
+        conn.commit()
+        conn.close()
+        consecutive_failures += 1
+        logger.error(f"  FAILED ({consecutive_failures} подряд)")
+        if consecutive_failures >= 3:
+            tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=6, minute=0, second=0)
+            quota_wait_until = tomorrow.timestamp()
+            logger.warning(f"3 ошибки подряд — квота YT. Жду до {tomorrow.strftime('%H:%M')}...")
+            consecutive_failures = 0
+        done += 1
+        time.sleep(30)
+        continue
 
 # Cleanup raw видео, от которых уже ничего не осталось
 if done > 0:

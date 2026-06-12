@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import os
 
-SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly']
 CLIENT_SECRETS_FILE = 'credentials.json'
 
 def main():
@@ -43,9 +43,7 @@ def main():
         return
 
     if len(sys.argv) == 2 and sys.argv[1] == '--save-token':
-        with open('auth_url.txt', 'r') as f:
-            first_line = f.readline().strip()
-        code = first_line
+        code = input('Вставь код из браузера: ').strip()
 
         with open('.oauth_state.json', 'r') as f:
             state = json.load(f)

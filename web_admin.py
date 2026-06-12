@@ -13,7 +13,7 @@ import threading
 import logging
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, jsonify, request, render_template_string, send_from_directory, send_file
+from flask import Flask, jsonify, request, render_template_string, send_file
 
 _pipeline_lock = threading.Lock()
 
@@ -69,7 +69,7 @@ def init_db():
         )
     """)
 
-    for col in ['youtube_title', 'description', 'tags']:
+    for col in ['youtube_title', 'description', 'tags', 'comments']:
         try:
             conn.execute(f"ALTER TABLE shorts ADD COLUMN {col} TEXT DEFAULT ''")
         except:
@@ -236,14 +236,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .short-card { background: #1a1a1a; border-radius: 10px; border: 1px solid #2a2a2a; overflow: hidden; transition: border-color .2s; }
 .short-card:hover { border-color: #3ea6ff; }
 .short-card .preview { width: 100%; aspect-ratio: 9/16; background: #000; display: flex; align-items: center; justify-content: center; font-size: 48px; color: #555; cursor: pointer; overflow: hidden; position: relative; }
-.short-card .preview video { width: 100%; height: 100%; object-fit: cover; }
-.short-card .preview .play-badge { position: absolute; width: 48px; height: 48px; background: rgba(0,0,0,.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; pointer-events: none; }
-.short-card .preview:hover .play-badge { background: rgba(255,255,255,.2); }
 
-.video-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.9); z-index: 100; align-items: center; justify-content: center; }
-.video-modal.show { display: flex; }
-.video-modal video { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
-.video-modal .close-video { position: absolute; top: 20px; right: 30px; font-size: 30px; color: #fff; cursor: pointer; background: none; border: none; }
 .short-card .info { padding: 12px; }
 .short-card .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .short-card .filename { font-size: 13px; color: #fff; word-break: break-all; }
@@ -263,10 +256,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .toast.error { background: #cc0000; }
 .toast.show { opacity: 1; }
 
-.meta-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2a2a; }
-.meta-label { font-size: 11px; color: #666; margin-bottom: 3px; margin-top: 6px; }
-.meta-input { width: 100%; padding: 5px 8px; background: #222; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; font-size: 12px; }
-.meta-textarea { width: 100%; padding: 5px 8px; background: #222; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; font-size: 12px; resize: vertical; font-family: inherit; }
+
 
 .video-link { color: #3ea6ff; text-decoration: none; font-size: 12px; }
 .video-link:hover { text-decoration: underline; }
@@ -330,33 +320,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 </div>
 </div>
 
-<div class="video-modal" id="videoModal" onclick="closeVideoPlayer()">
-<button class="close-video">✕</button>
-<video id="videoPlayer" controls autoplay></video>
-</div>
-
 <script>
-function playVideo(filename) {
-    const player = document.getElementById('videoPlayer');
-    player.src = '/data/processed/' + filename;
-    document.getElementById('videoModal').classList.add('show');
-}
-function closeVideoPlayer() {
-    const player = document.getElementById('videoPlayer');
-    player.pause();
-    player.src = '';
-    document.getElementById('videoModal').classList.remove('show');
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVideoPlayer(); });
-
-function downloadVideo(filename) {
-    const a = document.createElement('a');
-    a.href = '/data/processed/' + encodeURIComponent(filename);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
 
 function downloadZip(id) {
     window.location.href = '/api/shorts/' + encodeURIComponent(id) + '/download';
@@ -428,26 +392,21 @@ function renderCard(s) {
     const statusLabel = {pending:'Ожидает',uploaded:'Загружено',error:'Ошибка'}[s.status]||s.status;
     const ytUrl = s.youtube_url || '';
     const size = s.filesize ? (s.filesize/1024/1024).toFixed(1)+'MB' : '';
-    const localUrl = `/data/processed/${encodeURIComponent(s.filename)}`;
     const title = s.youtube_title || s.video_title || s.filename.replace(/\.mp4$/, '');
     return `<div class="short-card" data-id="${s.id}">
-        <div class="preview" onclick="playVideo('${encodeURIComponent(s.filename)}')">
-            <video src="${localUrl}#t=0.1" preload="metadata" muted></video>
-            <div class="play-badge">▶</div>
-        </div>
         <div class="info">
             <div class="info-row">
                 <span class="filename" title="${s.filename}">${title}</span>
                 <span class="status-badge ${statusClass}">${statusLabel}</span>
             </div>
             <div class="info-row">
-                <span class="filesize">${size}</span>
-                ${ytUrl ? `<a class="video-link" href="${ytUrl}" target="_blank">▶ Смотреть</a>` : ''}
+                ${ytUrl ? `<a class="video-link" href="${ytUrl}" target="_blank">▶ YouTube</a>` : ''}
+                <span>📅 ${s.created_at||''}</span>
             </div>
             <div class="stats-row">
                 <span>👁 ${s.views||0}</span>
                 <span>👍 ${s.likes||0}</span>
-                <span>📅 ${s.created_at||''}</span>
+                <span>💬 ${s.comments||0}</span>
             </div>
             <div class="comment">${s.comment||'<span style="color:#555">нет комментария</span>'}</div>
             <input class="comment-input" placeholder="Комментарий..." value="${(s.comment||'').replace(/"/g,'&quot;')}" onchange="saveComment('${s.id}',this.value)">
@@ -456,15 +415,7 @@ function renderCard(s) {
                 ${s.status==='pending' ? `<button class="btn btn-sm btn-secondary" onclick="markError('${s.id}')">✗ Ошибка</button>` : ''}
                 ${s.status!=='pending' ? `<button class="btn btn-sm btn-secondary" onclick="markPending('${s.id}')">↺ Вернуть</button>` : ''}
                 <button class="btn btn-sm btn-secondary" onclick="fetchYouTubeStats('${s.id}')">📊 Stats</button>
-                <button class="btn btn-sm btn-secondary" onclick="downloadZip('${s.id}')">⬇ Скачать (видео+мета)</button>
-            </div>
-            <div class="meta-section">
-                <div class="meta-label">Название для YouTube</div>
-                <input class="meta-input" value="${(s.youtube_title||'').replace(/"/g,'&quot;')}" onchange="saveMetadata('${s.id}','youtube_title',this.value)">
-                <div class="meta-label">Описание / хештеги</div>
-                <textarea class="meta-textarea" rows="2" onchange="saveMetadata('${s.id}','description',this.value)">${(s.description||'').replace(/"/g,'&quot;')}</textarea>
-                <div class="meta-label">Теги (через запятую)</div>
-                <input class="meta-input" value="${(s.tags||'').replace(/"/g,'&quot;')}" onchange="saveMetadata('${s.id}','tags',this.value)">
+                <button class="btn btn-sm btn-secondary" onclick="downloadZip('${s.id}')">⬇ ZIP</button>
             </div>
         </div>
     </div>`;
@@ -512,8 +463,14 @@ async function fetchYouTubeStats(id) {
 function closeStats() { document.getElementById('statsModal').classList.remove('show'); }
 
 async function refreshStats() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳ Обновление...';
+    toast('Обновляю статистику ('+shorts.filter(s=>s.youtube_url).length+' видео)...');
     const r = await api('POST', '/api/refresh-stats');
-    toast('Статистика обновлена для '+r.updated+' видео');
+    toast('Готово: обновлено '+r.updated+' видео');
+    btn.disabled = false;
+    btn.textContent = '📊 Обновить статистику';
     await loadData();
 }
 
@@ -697,10 +654,12 @@ def short_stats(sid):
         try:
             from googleapiclient.discovery import build
             from google.oauth2.credentials import Credentials
-            SCOPES = ['https://www.googleapis.com/auth/youtube.readonly']
-            if os.path.exists('token.json'):
+            token_path = BASE_DIR / 'token.json'
+            if token_path.exists():
                 creds = Credentials.from_authorized_user_info(
-                    json.loads(open('token.json').read()), SCOPES)
+                    json.loads(token_path.read_text()),
+                    ['https://www.googleapis.com/auth/youtube.readonly']
+                )
                 if creds.expired and creds.refresh_token:
                     from google.auth.transport.requests import Request
                     creds.refresh(Request())
@@ -708,16 +667,26 @@ def short_stats(sid):
                 vid_id = None
                 if 'watch?v=' in youtube_url:
                     vid_id = youtube_url.split('watch?v=')[1].split('&')[0]
+                elif '/shorts/' in youtube_url:
+                    vid_id = youtube_url.split('/shorts/')[1].split('?')[0].split('/')[0]
                 if vid_id:
                     resp = yt.videos().list(part='statistics,snippet', id=vid_id).execute()
                     if resp['items']:
                         st = resp['items'][0]['statistics']
                         sn = resp['items'][0]['snippet']
+                        views = int(st.get('viewCount', 0))
+                        likes = int(st.get('likeCount', 0))
+                        comments = int(st.get('commentCount', 0))
+                        conn2 = get_db()
+                        conn2.execute("UPDATE shorts SET views=?, likes=?, comments=? WHERE id=?",
+                            (views, likes, comments, sid))
+                        conn2.commit()
+                        conn2.close()
                         return jsonify({
                             'title': sn['title'],
-                            'views': int(st.get('viewCount', 0)),
-                            'likes': int(st.get('likeCount', 0)),
-                            'comments': int(st.get('commentCount', 0)),
+                            'views': views,
+                            'likes': likes,
+                            'comments': comments,
                             'youtube_url': youtube_url
                         })
         except Exception as e:
@@ -736,23 +705,29 @@ def refresh_stats():
         try:
             from googleapiclient.discovery import build
             from google.oauth2.credentials import Credentials
-            if os.path.exists('token.json'):
+            token_path = BASE_DIR / 'token.json'
+            if token_path.exists():
                 creds = Credentials.from_authorized_user_info(
-                    json.loads(open('token.json').read()),
+                    json.loads(token_path.read_text()),
                     ['https://www.googleapis.com/auth/youtube.readonly']
                 )
                 if creds.expired and creds.refresh_token:
                     from google.auth.transport.requests import Request
                     creds.refresh(Request())
                 yt = build('youtube', 'v3', credentials=creds)
-                vid_id = r['youtube_url'].split('watch?v=')[1].split('&')[0] if 'watch?v=' in r['youtube_url'] else None
+                url = r['youtube_url']
+                vid_id = None
+                if 'watch?v=' in url:
+                    vid_id = url.split('watch?v=')[1].split('&')[0]
+                elif '/shorts/' in url:
+                    vid_id = url.split('/shorts/')[1].split('?')[0].split('/')[0]
                 if vid_id:
                     resp = yt.videos().list(part='statistics', id=vid_id).execute()
                     if resp['items']:
                         st = resp['items'][0]['statistics']
                         conn2 = get_db()
-                        conn2.execute("UPDATE shorts SET views=?, likes=? WHERE id=?",
-                            (int(st.get('viewCount',0)), int(st.get('likeCount',0)), r['id']))
+                        conn2.execute("UPDATE shorts SET views=?, likes=?, comments=? WHERE id=?",
+                            (int(st.get('viewCount',0)), int(st.get('likeCount',0)), int(st.get('commentCount',0)), r['id']))
                         conn2.commit()
                         conn2.close()
                         updated += 1
@@ -841,11 +816,6 @@ def api_logs():
         text = log_path.read_text(encoding='utf-8', errors='replace')
         return jsonify({'log': text[-10000:]})
     return jsonify({'log': 'Лог за сегодня не найден'})
-
-
-@app.route('/data/processed/<filename>')
-def serve_short(filename):
-    return send_from_directory(str(PROCESSED_DIR), filename)
 
 
 if __name__ == '__main__':
