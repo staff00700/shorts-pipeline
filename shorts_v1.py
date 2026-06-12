@@ -681,8 +681,8 @@ class ShortsProcessor:
                     f":enable='between(t,0,3)'"
                 )
 
-            cta_start = max(0, duration - 4)
-            if font:
+            if font and duration > 4:
+                cta_start = duration - 4
                 filter_parts.append(
                     f"drawtext=text='Like & Subscribe'"
                     f":fontfile={font}"
@@ -702,6 +702,7 @@ class ShortsProcessor:
                     f":enable='between(t,{cta_start},{duration})'"
                 )
 
+            filter_parts = [p for p in filter_parts if p.strip()]
             vf = ','.join(filter_parts)
 
             cmd = [
@@ -731,7 +732,7 @@ class ShortsProcessor:
 
                 return True
             else:
-                logger.error(f"Ошибка создания Short: {result.stderr}")
+                logger.error(f"Ошибка создания Short (filter: {vf}): {result.stderr[:500]}")
                 return False
 
         except Exception as e:
