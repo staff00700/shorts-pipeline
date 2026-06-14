@@ -423,6 +423,7 @@ function renderCard(s) {
 
 async function saveComment(id, val) {
     await api('POST', `/api/shorts/${id}/comment`, {comment: val});
+    await loadData();
 }
 
 async function markUploaded(id) {
