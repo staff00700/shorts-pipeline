@@ -410,6 +410,7 @@ function renderCard(s) {
             </div>
             <div class="comment">${s.comment||'<span style="color:#555">нет комментария</span>'}</div>
             <input class="comment-input" placeholder="Комментарий..." value="${(s.comment||'').replace(/"/g,'&quot;')}" onchange="saveComment('${s.id}',this.value)">
+            ${s.youtube_url ? `<button class="btn btn-sm btn-secondary" style="margin:4px 0" onclick="toggleComments('${s.id}',this)">💬 Комментарии YouTube</button><div class="yt-comments" id="yt-comments-${s.id}" style="display:none"></div>` : ''}
             <div class="card-actions">
                 ${s.status==='pending' ? `<button class="btn btn-success btn-sm" onclick="markUploaded('${s.id}')">✓ Загружено</button>` : ''}
                 ${s.status==='pending' ? `<button class="btn btn-sm btn-secondary" onclick="markError('${s.id}')">✗ Ошибка</button>` : ''}
@@ -419,6 +420,66 @@ function renderCard(s) {
             </div>
         </div>
     </div>`;
+}
+
+async function toggleComments(id, btn) {
+    const div = document.getElementById('yt-comments-'+id);
+    if (div.style.display !== 'none') { div.style.display = 'none'; btn.textContent = '💬 Комментарии YouTube'; return; }
+    div.style.display = 'block';
+    btn.textContent = '⏳ Загрузка...';
+    div.innerHTML = '<div style="color:#555;padding:8px">Загрузка...</div>';
+    const r = await api('GET', `/api/shorts/${id}/comments`);
+    if (r.error) { div.innerHTML = `<div style="color:#e55;padding:8px">Ошибка: ${r.error}</div>`; btn.textContent = '💬 Комментарии YouTube'; return; }
+    if (!r.comments || !r.comments.length) { div.innerHTML = '<div style="color:#555;padding:8px">Нет комментариев</div>'; btn.textContent = '💬 Комментарии YouTube'; return; }
+    btn.textContent = '💬 Комментарии YouTube';
+    div.innerHTML = r.comments.map(c => renderComment(c, id)).join('');
+}
+
+function renderComment(c, shortId) {
+    const date = c.publishedAt ? new Date(c.publishedAt).toLocaleDateString('ru-RU') : '';
+    const replies = c.replies && c.replies.length
+        ? '<div style="margin-left:24px;margin-top:6px;border-left:2px solid #333;padding-left:8px">'
+            + c.replies.map(r => `<div style="margin-bottom:4px"><b style="color:#888;font-size:11px">${escHtml(r.author)}</b> <span style="font-size:12px">${escHtml(r.text)}</span></div>`).join('')
+            + '</div>'
+        : '';
+    return `<div style="margin-bottom:8px;padding:6px 8px;background:#1a1a1a;border-radius:4px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+            <b style="font-size:12px;color:#aaa">${escHtml(c.author)}</b>
+            <span style="font-size:10px;color:#666">${date} · 👍 ${c.likeCount}</span>
+        </div>
+        <div style="font-size:13px;margin-bottom:4px">${escHtml(c.text)}</div>
+        ${replies}
+        <div style="margin-top:4px">
+            <input class="comment-input" style="width:calc(100% - 60px);display:inline" placeholder="Ответить..." id="reply-input-${c.id}">
+            <button class="btn btn-sm btn-secondary" style="display:inline" onclick="replyComment('${shortId}','${c.id}')">➤</button>
+        </div>
+    </div>`;
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function replyComment(shortId, commentId) {
+    const input = document.getElementById('reply-input-'+commentId);
+    const text = input.value.trim();
+    if (!text) return;
+    const r = await api('POST', `/api/shorts/${shortId}/comments/${commentId}/reply`, {text});
+    if (r.error) { toast(r.error, true); return; }
+    toast('Ответ отправлен!');
+    input.value = '';
+    // Refresh comments
+    const btn = document.querySelector(`[onclick*="toggleComments('${shortId}'"]`);
+    if (btn) { btn.textContent = '⏳ Обновление...'; }
+    const div = document.getElementById('yt-comments-'+shortId);
+    if (div) {
+        const r2 = await api('GET', `/api/shorts/${shortId}/comments`);
+        if (r2.comments) {
+            div.innerHTML = r2.comments.map(c => renderComment(c, shortId)).join('');
+        }
+    }
+    if (btn) { btn.textContent = '💬 Комментарии YouTube'; }
 }
 
 async function saveComment(id, val) {
@@ -617,6 +678,120 @@ def save_comment(sid):
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/shorts/<sid>/comments')
+def api_short_comments(sid):
+    conn = get_db()
+    row = conn.execute("SELECT youtube_url FROM shorts WHERE id=?", (sid,)).fetchone()
+    conn.close()
+    if not row or not row['youtube_url']:
+        return jsonify({'comments': []})
+
+    vid_id = None
+    url = row['youtube_url']
+    if '/shorts/' in url:
+        vid_id = url.split('/shorts/')[1].split('?')[0].split('/')[0]
+    elif 'watch?v=' in url:
+        vid_id = url.split('watch?v=')[1].split('&')[0]
+
+    if not vid_id:
+        return jsonify({'comments': []})
+
+    try:
+        from googleapiclient.discovery import build
+        from google.oauth2.credentials import Credentials
+        token_path = BASE_DIR / 'token.json'
+        if not token_path.exists():
+            return jsonify({'comments': []})
+        creds = Credentials.from_authorized_user_info(
+            json.loads(token_path.read_text()),
+            ['https://www.googleapis.com/auth/youtube.force-ssl',
+             'https://www.googleapis.com/auth/youtube.readonly']
+        )
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+        yt = build('youtube', 'v3', credentials=creds)
+        resp = yt.commentThreads().list(
+            part='snippet,replies',
+            videoId=vid_id,
+            maxResults=20,
+            order='time'
+        ).execute()
+
+        comments = []
+        for item in resp.get('items', []):
+            top = item['snippet']['topLevelComment']['snippet']
+            c = {
+                'id': item['id'],
+                'author': top.get('authorDisplayName', ''),
+                'authorChannelUrl': top.get('authorChannelUrl', ''),
+                'text': top.get('textOriginal', ''),
+                'publishedAt': top.get('publishedAt', ''),
+                'likeCount': top.get('likeCount', 0),
+                'totalReplyCount': item['snippet'].get('totalReplyCount', 0),
+                'replies': []
+            }
+            for reply in item.get('replies', {}).get('comments', []):
+                rs = reply['snippet']
+                c['replies'].append({
+                    'id': reply['id'],
+                    'author': rs.get('authorDisplayName', ''),
+                    'text': rs.get('textOriginal', ''),
+                    'publishedAt': rs.get('publishedAt', ''),
+                    'likeCount': rs.get('likeCount', 0),
+                })
+            comments.append(c)
+        return jsonify({'comments': comments})
+    except Exception as e:
+        logger.warning(f"Comments fetch failed: {e}")
+        return jsonify({'error': str(e), 'comments': []})
+
+
+@app.route('/api/shorts/<sid>/comments/<comment_id>/reply', methods=['POST'])
+def api_reply_comment(sid, comment_id):
+    data = request.get_json() or {}
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'error': 'пустой текст'})
+
+    try:
+        from googleapiclient.discovery import build
+        from google.oauth2.credentials import Credentials
+        token_path = BASE_DIR / 'token.json'
+        if not token_path.exists():
+            return jsonify({'error': 'токен не найден'})
+        creds = Credentials.from_authorized_user_info(
+            json.loads(token_path.read_text()),
+            ['https://www.googleapis.com/auth/youtube.force-ssl']
+        )
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+        yt = build('youtube', 'v3', credentials=creds)
+        reply = yt.comments().insert(
+            part='snippet',
+            body={
+                'snippet': {
+                    'parentId': comment_id,
+                    'textOriginal': text
+                }
+            }
+        ).execute()
+        rs = reply['snippet']
+        return jsonify({
+            'ok': True,
+            'reply': {
+                'id': reply['id'],
+                'author': rs.get('authorDisplayName', ''),
+                'text': rs.get('textOriginal', ''),
+                'publishedAt': rs.get('publishedAt', ''),
+            }
+        })
+    except Exception as e:
+        logger.warning(f"Reply failed: {e}")
+        return jsonify({'error': str(e)})
 
 
 @app.route('/api/shorts/<sid>/download')
