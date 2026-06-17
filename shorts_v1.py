@@ -999,6 +999,8 @@ def main():
         videos = collector.search_videos(query, max_results=5)
 
         for video_data in videos:
+            if len(downloaded_videos) >= CONFIG['max_videos_per_day']:
+                break
             video_id = video_data['video_id']
             if video_id in seen_ids or video_id in prev_ids:
                 continue
