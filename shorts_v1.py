@@ -11,6 +11,7 @@ import time
 import logging
 import subprocess
 import urllib.parse
+import html
 from datetime import datetime
 from pathlib import Path
 
@@ -1003,7 +1004,7 @@ def main():
                 continue
 
             video_url = f"https://www.youtube.com/watch?v={video_id}"
-            video_title = video_data['title']
+            video_title = html.unescape(video_data['title'])
 
             safe_title = "".join(c for c in video_title if c.isalnum() or c in (' ', '-', '_')).strip()[:50]
 
