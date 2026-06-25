@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Authorization Callback</title>
+<style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f5f5f5}pre{background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1)}</style>
+</head>
+<body>
+<pre id="info">Loading...</pre>
+<script>
+const params = new URLSearchParams(location.search);
+const data = {};
+for (const [k,v] of params) data[k]=v;
+document.getElementById('info').textContent = JSON.stringify(data, null, 2);
+</script>
+</body>
+</html>
