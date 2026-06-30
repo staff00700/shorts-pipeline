@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shorts Uploader — Automated Short-Form Video Publishing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f13; color: #e8e8ed; line-height: 1.7; }
+  .container { max-width: 800px; margin: 0 auto; padding: 60px 24px; }
+  h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 8px; background: linear-gradient(135deg, #fff 0%, #888 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: #888; font-size: 1.1rem; margin-bottom: 40px; }
+  .card { background: #1a1a24; border-radius: 12px; padding: 32px; margin-bottom: 24px; border: 1px solid #2a2a35; }
+  h2 { font-size: 1.3rem; margin-bottom: 16px; color: #fff; }
+  ul { list-style: none; }
+  li { padding: 8px 0; color: #b0b0b8; }
+  li::before { content: "▸ "; color: #6366f1; }
+  a { color: #818cf8; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .footer { margin-top: 48px; text-align: center; color: #555; font-size: 0.9rem; }
+  .footer a { color: #555; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Shorts Uploader</h1>
+  <p class="subtitle">Automated short-form video publishing tool</p>
+
+  <div class="card">
+    <h2>About</h2>
+    <p style="color:#b0b0b8">Shorts Uploader is a self-hosted server application that creates and publishes educational short-form videos (30–60 seconds) to social media platforms. It downloads public domain educational content, processes clips with subtitles, and uploads them on a daily schedule.</p>
+  </div>
+
+  <div class="card">
+    <h2>Features</h2>
+    <ul>
+      <li>Automated video downloading and processing with FFmpeg</li>
+      <li>AI-powered moment selection from video transcripts</li>
+      <li>Embedded subtitle generation via Whisper</li>
+      <li>Scheduled daily publishing (up to 5 shorts/day)</li>
+      <li>Web admin panel for monitoring and comment management</li>
+      <li>Cross-platform support: YouTube, TikTok</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Documentation</h2>
+    <ul>
+      <li><a href="privacy-policy">Privacy Policy</a></li>
+      <li><a href="terms-of-service">Terms of Service</a></li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <p>Shorts Uploader &mdash; <a href="https://github.com/staff00700/shorts-pipeline">GitHub</a></p>
+  </div>
+</div>
+</body>
+</html>
